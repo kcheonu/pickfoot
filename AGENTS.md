@@ -9,9 +9,19 @@ estimates the probabilities of:
 -   Draw
 -   Away win
 
-The project should combine historical match results, team form, starting
-lineups, player appearances, and player-combination features. The goal
-is a usable prediction service, not merely a one-off notebook.
+The final service is planned to support two prediction modes:
+
+-   `PRE_MATCH`: use team strength, historical results, and recent form
+    available by the day before kickoff.
+-   `POST_LINEUP`: after official starting lineups are announced, update
+    the prediction using available player records and player-combination
+    features.
+
+The immediate priority is to complete and evaluate a reliable
+`PRE_MATCH` baseline before starting lineup-based modeling. The goal is
+a usable prediction service, not merely a one-off notebook. Predictions
+are estimates that require validation; they do not guarantee match
+outcomes.
 
 The initial target competitions are the European top five domestic
 leagues:
@@ -22,38 +32,57 @@ leagues:
 -   Serie A (Italy)
 -   Ligue 1 (France)
 
-**Important data limitation:** StatsBomb Open Data is free and useful
-for prototyping, but it covers only selected competitions and seasons.
-Never claim that it supplies complete historical coverage for all five
-leagues. Inspect the actual competition and season metadata first,
-record coverage, and represent unavailable data explicitly. Keep
-data-source integrations replaceable so a broader-coverage API provider
+**Important data limitation:** StatsBomb Open Data covers only selected
+competitions and seasons. Never claim that it supplies complete
+historical coverage for all five leagues. Coverage and match-availability
+inspection are completed exploration work; preserve the existing
+inspection tools and their findings where available, and represent
+unavailable coverage explicitly. This exploration does not mean that
+historical results have been imported or that a model has been built.
+Keep data-source integrations replaceable so a broader-coverage provider
 can be added later without rewriting the prediction domain.
 
 ## 2. Data-source policy
 
-### Initial source: StatsBomb Open Data
+### Initial model input: authorized local match-results CSV
 
-Use the official public dataset: - Repository:
-https://github.com/statsbomb/open-data - Data format: JSON - Typical
-data groups: competitions, matches, events, lineups, and (where
-available) 360 data.
+Build the initial model from local CSV match-results data whose
+permission for the intended use has been confirmed. Public
+accessibility alone does not establish permission for machine-learning
+training or redistribution. If an authorized local file is not
+available, do not invent, synthesize, or download match results to fill
+the gap; report that model development is blocked on suitable data.
+Normalize and validate CSV input before feature generation, preserving
+missing values rather than silently treating them as zero.
 
-Use only competitions and seasons actually present in the repository. Do
-not invent fixtures, lineups, player records, or statistics to fill
-gaps. Preserve source identifiers and attribution information.
+### Supplementary source: StatsBomb Open Data
 
-If a future provider such as API-Football is added to achieve broader
-top-five-league coverage: - Implement it as a separate provider
-adapter. - Check current documentation, coverage, plan limits, terms,
-and rate limits before using it. - Keep provider-specific IDs separate
-from internal database IDs. - Never scrape or bypass access controls
-when an official API or permitted dataset is available.
+Use the official public dataset at
+https://github.com/statsbomb/open-data as a possible future source for
+lineup and player-combination analysis. Its JSON data includes selected
+competitions and seasons only. Inspect actual metadata and match
+availability before use; never assume it covers every season or all
+five leagues. Do not invent fixtures, lineups, player records, or
+statistics to fill gaps. Preserve source identifiers and attribution
+information.
+
+Defer external APIs such as API-Football and automated latest-season
+collection to a later milestone. Before using any dataset or provider,
+verify the applicable license/terms and permitted uses, attribution and
+redistribution requirements, competition/season coverage, and
+collection date. Record the source, source identifiers, license or
+terms reference, coverage, and retrieval/collection timestamp for each
+dataset or imported record as applicable. Implement each future provider
+as a separate adapter, keep provider IDs separate from internal IDs,
+and never scrape or bypass access controls.
 
 ### Data quality requirements
 
 -   Store the provider/source name and source identifier for imported
     records.
+-   Track each data source's license/terms, provenance, actual coverage,
+    and collection or retrieval time; do not imply rights that have not
+    been verified.
 -   Make ingestion idempotent: re-running a sync must not create
     duplicate matches or players.
 -   Validate payloads and report malformed or incomplete records.
@@ -133,8 +162,9 @@ football-predictor/
 │           └── main.py
 ├── scripts/
 │   ├── inspect_coverage.py
-│   ├── sync_data.py
-│   └── train_model.py
+│   ├── inspect_match_availability.py
+│   ├── train_model.py
+│   └── predict_match.py
 ├── migrations/
 ├── tests/
 │   ├── unit/
@@ -147,7 +177,8 @@ football-predictor/
 Keep generated data and model artifacts out of source control unless
 explicitly intended. Do not commit secrets, large raw datasets, or
 downloaded data files without checking repository policy and dataset
-terms.
+terms. Adapt this suggested layout to the actual repository; do not
+assume these paths or files already exist.
 
 ## 5. Data model and persistence
 
@@ -170,8 +201,11 @@ entities should cover:
     provider actually supplies.
 -   `data_sync_runs`: source, start/end time, status, counts, and error
     summary.
--   `predictions`: match, prediction timestamp, model version,
-    probabilities, feature/lineup snapshot reference.
+-   `predictions`: match, prediction timestamp/cutoff, prediction mode,
+    model version, H/D/A probabilities, feature snapshot reference.
+-   `model_artifacts` or equivalent: model version, training/validation
+    period, source-data reference, feature definition, and evaluation
+    metrics needed to identify and reproduce the model state.
 
 Database rules:
 
@@ -194,61 +228,91 @@ Database rules:
 Build features only from information available at the prediction cutoff
 time.
 
-Start with simple, interpretable features: - Team form over the previous
-5 and 10 matches. - Previous goals for and against, split by home/away
-where useful. - Elo or another time-updated team-strength rating. - Rest
-days and schedule congestion when reliable dates are available. -
-Starting-player availability and lineup continuity when lineups are
-available before kickoff. - Count of shared appearances for player
-pairs. - Shared minutes and team goal difference during shared
-appearances, where the data supports these measures. - Formation and
-positional balance when reliably recorded.
+For the first `PRE_MATCH` model, prioritize features in this order:
+team Elo rating; each team's previous-five-match form and goals for and
+against; and home advantage. Any additional form or schedule feature
+must use only reliable data available at the prediction cutoff.
+
+Do not use the actual starting XI as a `PRE_MATCH` input. Add lineup
+availability/continuity, player appearances, shared player-pair
+appearances and minutes, and reliable formation/position features only
+for the later `POST_LINEUP` mode, and only when those facts were
+available after lineup announcement but before kickoff.
 
 Do not immediately generate every possible player pair or use player
 names as arbitrary numeric features. Start with team-level features,
 establish a baseline, then add lineup features and player-combination
 features as separate experiments.
 
-For player-combination statistics: - Require a minimum sample size or
-use smoothing/shrinkage. - Account for minutes played rather than
-treating every appearance equally. - Avoid interpreting raw pair win
-rates as causal effects. - Recognize that opponent strength, player
-quality, tactical role, and match context can confound pair
-statistics. - Compare against a baseline model to measure whether each
-feature group actually improves performance.
+For player-combination statistics, require a minimum sample size or use
+smoothing/shrinkage; account for minutes played rather than treating
+every appearance equally; and do not interpret raw pair win rates as
+causal effects. Opponent strength, player quality, tactical role, and
+match context can confound these statistics. Compare them with the
+`PRE_MATCH` baseline on the same chronological test period before
+claiming value.
 
 ## 7. Prediction and evaluation rules
 
-The target is three-class classification: home win, draw, away win.
+The target is three-class classification: home win (H), draw (D), and
+away win (A). Build the first `PRE_MATCH` model in this order:
 
-Build a simple baseline first, such as Elo-derived probabilities and/or
-multinomial logistic regression. Consider Random Forest or XGBoost only
-after the data pipeline and baseline evaluation are reliable.
+1. Read, validate, and normalize authorized local match-results CSV
+   input.
+2. Calculate time-updated team Elo ratings.
+3. Generate previous-five-match form and goals-for/goals-against
+   features for each team.
+4. Include home advantage.
+5. Train a multinomial Logistic Regression model to predict H/D/A
+   probabilities.
+6. Train and validate on chronologically separated data.
+7. Persist predictions and sufficient model state/metadata to identify
+   and reproduce the model.
 
-Use chronological validation: - Train on earlier matches. - Validate on
-a later period. - Test on a still later period when data volume
-permits. - Never randomly mix future and past matches in a way that
-leaks information.
+Elo is a team-strength feature; do not assume Elo alone automatically
+produces a draw probability. Consider more complex models only after
+this baseline and its evaluation are reliable.
 
-Prevent leakage: - For a historical prediction, use only features
-available before that match's kickoff or the explicitly defined
-prediction cutoff. - Do not use final scores, post-match statistics,
-completed lineups that were not known at the simulated cutoff, or future
-matches to calculate historical features. - Compute rolling statistics
-using past matches only. - Fit preprocessing and calibration only on
-training/validation data, not the final test set. - Store the prediction
-timestamp, model version, and feature snapshot or equivalent
-reproducibility metadata.
+### Leakage prevention
 
-Evaluate more than accuracy. Report multiclass log loss, Brier score
-where implemented correctly, calibration, and confusion matrix. Compare
-baseline, team-form, lineup, and player-combination feature sets on the
-same time-based test window. Never invent or claim performance
-improvements that have not been measured.
+-   For each prediction, use only information available at its
+    explicitly recorded cutoff. `PRE_MATCH` uses information available
+    by the day before kickoff and must not include the actual starting
+    XI. `POST_LINEUP` may use confirmed lineup and player information
+    available after announcement and before kickoff, but no
+    post-match-only information.
+-   Never use a match's result, final score, or post-match statistics to
+    generate that match's input features. Update Elo and rolling form
+    only after the result becomes available, for later predictions.
+-   Do not let results from another match on the same date leak into a
+    prediction merely because an implementation processes that match
+    first. Unless kickoff and cutoff timestamps establish that the
+    result was already available, calculate same-date match features
+    without any same-date results.
+-   Split training and validation chronologically, never randomly.
+    Fit preprocessing and any probability calibration using training
+    data (and validation data only as appropriate); do not fit or tune
+    on the final test set.
+-   When using multiple seasons, preserve their actual chronological
+    order. Document how teams entering through promotion or leaving
+    through relegation are initialized, carried forward, or otherwise
+    handled; do not invent prior results for them.
+-   Store the prediction cutoff/timestamp, mode, model version, and
+    feature/data snapshot or equivalent reproducibility metadata.
 
-Return three probabilities that are each in `[0, 1]` and sum to
-approximately `1`. If the input data is missing or out of distribution,
-surface that limitation rather than presenting unjustified certainty.
+### Evaluation and probabilities
+
+Report Accuracy, multiclass Log Loss, and multiclass Brier Score, and
+compare against a simple class-frequency baseline on the same
+chronological evaluation period. State the evaluation dates and number
+of matches. Where useful, inspect and report probability calibration.
+Document the multiclass Brier Score convention used. Do not overstate
+performance when data is limited, and never claim unmeasured
+improvements. All modes must return H, D, and A probabilities, each in
+`[0, 1]`, summing to `1` within the documented numerical tolerance. If
+data is missing or out of distribution, surface that limitation rather
+than presenting unjustified certainty. These are estimates that require
+validation, not guarantees of actual outcomes.
 
 ## 8. API, credentials, and operational safety
 
@@ -273,18 +337,24 @@ surface that limitation rather than presenting unjustified certainty.
 
 Add tests alongside each feature. At minimum:
 
--   Unit tests for provider JSON parsing and schema validation.
--   Tests for missing optional fields and malformed payloads.
--   Tests that repeated ingestion does not duplicate records.
--   Tests for match outcome labels and probability normalization.
--   Tests for rolling features that prove future matches do not affect
-    past rows.
--   Tests for player-combination features with small samples and missing
-    appearances.
--   Integration tests for database writes and migrations when a test
+-   Test CSV normalization, required fields, malformed rows, missing
+    optional values, and outcome labels.
+-   Test Elo and previous-five-match features, including that a result
+    cannot affect its own or an earlier prediction's features and that
+    same-date results do not leak through processing order.
+-   Test chronological train/validation splitting and H/D/A probability
+    normalization.
+-   Test the class-frequency baseline and evaluation metric
+    calculations.
+-   Test provider JSON parsing, schema validation, missing optional
+    fields, and idempotent ingestion when those integrations are
+    implemented.
+-   Test player-combination features with small samples and missing
+    appearances when that later milestone is implemented.
+-   Add integration tests for database writes and migrations when a test
     database is available.
 -   Use saved, anonymized or appropriately licensed fixtures; unit tests
-    must not depend on a live external API.
+    must not depend on a live external API or unauthorized dataset.
 
 Run relevant tests after code changes. If a command is blocked, requires
 approval, or cannot run in the current environment, report that clearly
@@ -317,22 +387,40 @@ permission was denied.
 
 ## 11. Implementation milestones
 
-Work in small, reviewable milestones. Do not implement all milestones in
-one request.
+The StatsBomb coverage and match-availability inspection is completed
+exploration work. Preserve the existing inspection tools and document
+their actual findings; this does not imply complete five-league
+coverage, match ingestion, or model completion.
 
-1.  Inspect repository and create a coverage-inspection script for
-    StatsBomb Open Data.
-2.  Build validated models and tests for competition and match JSON.
-3.  Import selected matches idempotently and report actual
-    competition/season coverage.
-4.  Add lineup ingestion and validate player/team relationships.
-5.  Add team form and Elo baseline features.
-6.  Train and evaluate a chronological baseline model.
-7.  Add lineup features and compare results.
-8.  Add player-combination features and compare results.
-9.  Persist reproducible predictions and expose them through an API.
-10. Add a simple dashboard and scheduled refresh only after the pipeline
-    is reliable.
+Proceed in this priority order; do not skip ahead while the
+`PRE_MATCH` baseline remains unevaluated:
 
-At each milestone, state what is implemented, what was tested, what data
-is actually available, and what remains incomplete.
+1.  **M1.** Check public dataset terms and confirm permissions for
+    intended use; record source, license/terms, attribution,
+    competition/season coverage, and collection time. Do not treat
+    public visibility as permission to train or redistribute.
+2.  **M2.** Normalize authorized local match-results CSV input; if no
+    eligible file exists, report the blocker without fabricating or
+    downloading data.
+3.  **M3.** Generate Elo and previous-five-match form and goals
+    features, including home/away context where supported, with
+    prediction cutoffs and leakage controls.
+4.  **M4.** Train and chronologically validate the `PRE_MATCH` H/D/A
+    model; compare it with the class-frequency baseline and report
+    Accuracy, Log Loss, Multiclass Brier Score, evaluation period, and
+    match count.
+5.  **M5.** Add a CLI for predicting a specified match and persist the
+    prediction plus identifiable model state and reproducibility
+    metadata.
+6.  **M6.** Integrate historical starting-XI data with verified
+    permissions, actual coverage, and pre-kickoff availability.
+7.  **M7.** Add and evaluate `POST_LINEUP` player and player-combination
+    features against the same `PRE_MATCH` test window.
+8.  **M8.** Expose predictions through an API and user interface.
+9.  **M9.** Integrate a latest-season API source and automated updates
+    only after checking current coverage, documentation, terms, plan
+    limits, and rate limits.
+
+At each milestone, state what is implemented, what was tested, what
+data and permissions are actually available, the evaluation period and
+sample size where applicable, and what remains incomplete.

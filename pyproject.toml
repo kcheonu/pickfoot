@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pickfoot"
+version = "0.1.0"
+description = "PickFoot football analytics and prediction platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "joblib>=1.4",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.2",
+    "alembic>=1.13",
+    "pydantic-settings>=2.5",
+    "python-multipart>=0.0.12",
+    "scikit-learn>=1.6",
+    "streamlit>=1.40",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx2>=2.0"]
+
+[project.scripts]
+pickfoot = "pickfoot.cli:main"
+pickfoot-worker = "pickfoot.api.worker:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

@@ -1,0 +1,131 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: pickfoot
+      POSTGRES_USER: pickfoot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pickfoot-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pickfoot -d pickfoot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://pickfoot:${POSTGRES_PASSWORD}@db:5432/pickfoot
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?Set ADMIN_PASSWORD_HASH in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      BASE_MATCHES_CSV: /app/data/raw/matches.csv
+      DATA_STORAGE_DIR: /app/data/persistent
+      MODEL_STORAGE_DIR: /app/models
+    depends_on:
+      db:
+        condition: service_healthy
+
+  migrate-sqlite:
+    build: .
+    profiles: ["migration"]
+    command:
+      - "python"
+      - "-m"
+      - "pickfoot.api.migrate_sqlite"
+      - "--source"
+      - "/app/data/runtime/pickfoot.sqlite3"
+    environment:
+      DATABASE_URL: postgresql+psycopg://pickfoot:${POSTGRES_PASSWORD}@db:5432/pickfoot
+      MODEL_STORAGE_DIR: /app/models
+    volumes:
+      - ./data/runtime:/app/data/runtime:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    build: .
+    command: ["uvicorn", "pickfoot.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://pickfoot:${POSTGRES_PASSWORD}@db:5432/pickfoot
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?Set ADMIN_PASSWORD_HASH in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      BASE_MATCHES_CSV: /app/data/raw/matches.csv
+      DATA_STORAGE_DIR: /app/data/persistent
+      MODEL_STORAGE_DIR: /app/models
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./data/persistent:/app/data/persistent
+      - ./data/raw:/app/data/raw:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  worker:
+    build: .
+    command: ["pickfoot-worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://pickfoot:${POSTGRES_PASSWORD}@db:5432/pickfoot
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-[]}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?Set ADMIN_PASSWORD_HASH in .env}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      BASE_MATCHES_CSV: /app/data/raw/matches.csv
+      DATA_STORAGE_DIR: /app/data/persistent
+      MODEL_STORAGE_DIR: /app/models
+    volumes:
+      - ./models:/app/models
+      - ./data/persistent:/app/data/persistent
+      - ./data/raw:/app/data/raw:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - "from pathlib import Path; assert b'pickfoot-worker' in Path('/proc/1/cmdline').read_bytes()"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+volumes:
+  pickfoot-postgres:

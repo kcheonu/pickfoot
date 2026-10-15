@@ -1,0 +1,152 @@
+{
+  "provider": "OpenFootball",
+  "repository_url": "https://github.com/openfootball/football.json",
+  "source_data_url": "https://github.com/openfootball/football.json/tree/master/2025-26",
+  "season": "2025/26",
+  "competitions": [
+    "Premier League",
+    "La Liga",
+    "Bundesliga",
+    "Serie A",
+    "Ligue 1"
+  ],
+  "license_and_terms": "Repository README states football.json schema, data, and scripts are dedicated to the public domain and may be used without restrictions. Checked 2026-10-14. No standalone LICENSE file was present at the checked raw URL.",
+  "license_checked_at": "2026-10-14",
+  "attribution": "OpenFootball / football.json; source attribution retained in project documentation.",
+  "source_collection_time_utc": null,
+  "source_collection_time_note": "Not present in source CSV or locally available records; not inferred from local filesystem timestamps.",
+  "source_csv_sha256": "920b070e529723d48750cb886c1f3425acc9ac6294cf6ad02af8f40897d96144",
+  "source_csv_path": "data/raw/matches.csv",
+  "normalized_csv_path": "data/processed/matches_normalized.csv",
+  "normalized_rows": 1751,
+  "coverage_start": "2025-08-15",
+  "coverage_end": "2026-05-24",
+  "matches_by_league": {
+    "Bundesliga": 306,
+    "La Liga": 380,
+    "Ligue 1": 305,
+    "Premier League": 380,
+    "Serie A": 380
+  },
+  "teams_by_league": {
+    "Bundesliga": 18,
+    "La Liga": 20,
+    "Ligue 1": 18,
+    "Premier League": 20,
+    "Serie A": 20
+  },
+  "missing_final_score": {
+    "league": "Ligue 1",
+    "fixture_from_local_source_preparation_note": "FC Nantes vs Toulouse FC",
+    "treatment": "Excluded; no score or result inferred or fabricated."
+  },
+  "normalization": "League provider codes mapped to canonical names, season 2025/26 normalized to 2025-26, dates sorted and serialized as YYYY-MM-DD. Original CSV not modified.",
+  "training_run_date": "2026-10-14",
+  "trained_models": {
+    "Bundesliga": {
+      "artifact_path": "models/bundesliga.joblib",
+      "model_version": "pickfoot-pre-match-logreg-1",
+      "model_data_kind": "authorized_real",
+      "matches": 306,
+      "data_as_of": "2026-05-16",
+      "evaluation": {
+        "train_start": "2025-08-22",
+        "train_end": "2026-03-15",
+        "validation_start": "2026-03-20",
+        "validation_end": "2026-05-16",
+        "train_matches": 234,
+        "validation_matches": 72,
+        "accuracy": 0.3333333333333333,
+        "log_loss": 1.1623951533295358,
+        "brier_score": 0.7009344373715831,
+        "baseline_accuracy": 0.3888888888888889,
+        "baseline_log_loss": 1.0916975839794516,
+        "baseline_brier_score": 0.6633428300094967
+      }
+    },
+    "La Liga": {
+      "artifact_path": "models/la-liga.joblib",
+      "model_version": "pickfoot-pre-match-logreg-1",
+      "model_data_kind": "authorized_real",
+      "matches": 380,
+      "data_as_of": "2026-05-24",
+      "evaluation": {
+        "train_start": "2025-08-15",
+        "train_end": "2026-03-22",
+        "validation_start": "2026-04-03",
+        "validation_end": "2026-05-24",
+        "train_matches": 290,
+        "validation_matches": 90,
+        "accuracy": 0.45555555555555555,
+        "log_loss": 1.0790436309854197,
+        "brier_score": 0.6428184803859511,
+        "baseline_accuracy": 0.5111111111111111,
+        "baseline_log_loss": 1.0323690297862504,
+        "baseline_brier_score": 0.6199471528603513
+      }
+    },
+    "Ligue 1": {
+      "artifact_path": "models/ligue-1.joblib",
+      "model_version": "pickfoot-pre-match-logreg-1",
+      "model_data_kind": "authorized_real",
+      "matches": 305,
+      "data_as_of": "2026-05-17",
+      "evaluation": {
+        "train_start": "2025-08-15",
+        "train_end": "2026-03-21",
+        "validation_start": "2026-03-22",
+        "validation_end": "2026-05-17",
+        "train_matches": 237,
+        "validation_matches": 68,
+        "accuracy": 0.45588235294117646,
+        "log_loss": 1.0266804720911824,
+        "brier_score": 0.6279747356680948,
+        "baseline_accuracy": 0.38235294117647056,
+        "baseline_log_loss": 1.1201101099795208,
+        "baseline_brier_score": 0.681217292770871
+      }
+    },
+    "Premier League": {
+      "artifact_path": "models/premier-league.joblib",
+      "model_version": "pickfoot-pre-match-logreg-1",
+      "model_data_kind": "authorized_real",
+      "matches": 380,
+      "data_as_of": "2026-05-24",
+      "evaluation": {
+        "train_start": "2025-08-15",
+        "train_end": "2026-04-11",
+        "validation_start": "2026-04-12",
+        "validation_end": "2026-05-24",
+        "train_matches": 314,
+        "validation_matches": 66,
+        "accuracy": 0.5606060606060606,
+        "log_loss": 0.9936511399759974,
+        "brier_score": 0.5966116142658541,
+        "baseline_accuracy": 0.4696969696969697,
+        "baseline_log_loss": 1.0690752502827856,
+        "baseline_brier_score": 0.6456473125100655
+      }
+    },
+    "Serie A": {
+      "artifact_path": "models/serie-a.joblib",
+      "model_version": "pickfoot-pre-match-logreg-1",
+      "model_data_kind": "authorized_real",
+      "matches": 380,
+      "data_as_of": "2026-05-24",
+      "evaluation": {
+        "train_start": "2025-08-23",
+        "train_end": "2026-03-22",
+        "validation_start": "2026-04-04",
+        "validation_end": "2026-05-24",
+        "train_matches": 300,
+        "validation_matches": 80,
+        "accuracy": 0.4875,
+        "log_loss": 1.0825664047817887,
+        "brier_score": 0.6362677363152545,
+        "baseline_accuracy": 0.3625,
+        "baseline_log_loss": 1.0868112801388612,
+        "baseline_brier_score": 0.6595388888888889
+      }
+    }
+  }
+}
